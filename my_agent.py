@@ -1,3 +1,4 @@
+from math import exp
 import random
 import numpy as np
 import torch
@@ -24,7 +25,7 @@ class DQN(nn.Module):
     forward() : compute forward pass in the network
     """
 
-    def __init__(self, action_space_dim=3, hidden_dim=256) -> None:
+    def __init__(self, action_space_dim=3, hidden_dim=128) -> None:
         """
         Initialization of the DQN
         ------------
@@ -115,8 +116,8 @@ class Agent(object):
         self.memory = ReplayMemory(self.memory_size)
 
         # networks
-        self.policy_net = DQN(action_space_dim=3, hidden_dim=256)
-        self.target_net = DQN(action_space_dim=3, hidden_dim=256)
+        self.policy_net = DQN(action_space_dim=3, hidden_dim=128)
+        self.target_net = DQN(action_space_dim=3, hidden_dim=128)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=1e-3)
@@ -149,7 +150,9 @@ class Agent(object):
         action_batch = torch.stack(batch.action)
 
         # estimate Q(st, a) with the policy network
-        state_action_values = self.policy_net.forward(ob_batch).gather(1, action_batch)
+        state_action_values = (
+            self.policy_net.forward(ob_batch).gather(1, action_batch).squeeze()
+        )
 
         # estimate V(st+1) with target network
         next_state_values = torch.zeros(self.batch_size)
@@ -157,18 +160,13 @@ class Agent(object):
             self.target_net.forward(non_final_next_obs).max(1)[0].detach()
         )
 
-        if next_state_values.size != state_action_values.size:
-            # fmt: off
-            import IPython ; IPython.embed()
-            # fmt: on
-
         # expected Q value
-        expected_state_action_values = rew_batch + self.gamma * next_state_values
+        expected_state_action_values = (
+            rew_batch.squeeze() + self.gamma * next_state_values
+        )
 
         # loss
-        loss = F.smooth_l1_loss(
-            state_action_values.squeeze(), expected_state_action_values
-        )
+        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values)
 
         # optimize the network
         self.optimizer.zero_grad()
@@ -200,7 +198,7 @@ class Agent(object):
         # epsilon greedy action selection
         # TODO: use glie
         if np.random.rand() < epsilon:
-            action = np.random.randint(0, 4)
+            action = np.random.randint(0, 3)
         else:
             action = self.policy_net.forward(ob).argmax().item()
 

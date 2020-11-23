@@ -14,6 +14,7 @@ from PIL import Image
 # CONFIGURATION VARIABLE
 TARGET_UPDATE = 5  # update target_net every TARGET_UPDATE frames
 FRAME_STALL = 4  # update policy_net every FRAME_STALL frames
+GLIE_A = 526  # a paramenter in glie -> a = 526 means eps = 0.05 when episode = 10000
 
 # args parser
 parser = argparse.ArgumentParser()
@@ -43,6 +44,7 @@ for ep in range(0, episodes):
     done = False
     (ob, _) = env.reset()
     frame = 0
+    epsilon = GLIE_A / (GLIE_A + ep)
     while not done:
 
         # Get the actions from both SimpleAIs
