@@ -8,6 +8,7 @@ import random
 import my_utils
 
 from torch.tensor import Tensor
+from my_utils import Transition, ReplayMemory
 from wimblepong import Wimblepong
 
 
@@ -45,9 +46,9 @@ class DQN(nn.Module):
         # fc -> fully connected
         self.cnv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=8)
         self.cnv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=4)
-        self.cnv3 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4)
+        self.cnv3 = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=4)
         self.flat1 = nn.Flatten()
-        self.fc1 = nn.Linear(64 * 21 * 21, self.hidden_dim)
+        self.fc1 = nn.Linear(32 * 21 * 21, self.hidden_dim)
         self.fc2 = nn.Linear(self.hidden_dim, action_space_dim)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -82,7 +83,15 @@ class Agent(object):
     reset() : reset state for the agent
     """
 
-    def __init__(self, env, player_id=1) -> None:
+    def __init__(
+        self,
+        env,
+        player_id: int = 1,
+        name: str = "\(°_°')/",
+        batch_size: int = 32,
+        gamma: float = 0.98,
+        memory_size: int = 10000,
+    ) -> None:
         """
         Initialization of the Agent
         ------------
@@ -98,10 +107,12 @@ class Agent(object):
 
         # list of parameters of the agent
         self.env = env
-        self.player_id = id
-        self.name = "\(°_°')/"
-        self.batch_size = 32  # size of batch for update
-        self.gamma = 0.98  # discount factor
+        self.player_id = player_id
+        self.name = name
+        self.batch_size = batch_size  # size of batch for update
+        self.gamma = gamma  # discount factor
+        self.memory_size = memory_size  # size of replay memory
+        self.memory = ReplayMemory(self.memory_size)
 
         # networks
         self.policy_net = DQN(action_space_dim=3, hidden_dim=256)
@@ -110,7 +121,7 @@ class Agent(object):
         self.target_net.eval()
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=1e-3)
 
-    def update(self, ob, action, next_ob, rew, done) -> None:
+    def update(self) -> None:
         """
         Update policy network
         ------------
@@ -119,31 +130,40 @@ class Agent(object):
 
         TODO: params
         """
-        # preprocess imgs
-        ob = self.preprocess_img(ob)
-        next_ob = self.preprocess_img(next_ob)
+        # check if memory has enough elements to sample
+        if len(self.memory) < self.batch_size:
+            return
 
-        # estimate Q(st, a) with new network
-        state_action_values = self.policy_net.forward(ob)[0][action].expand((1))
+        # get transitions
+        transitions = self.memory.sample(self.batch_size)
+        batch = Transition(*zip(*transitions))
 
-        # estimate V(st+1) with old network
-        next_state_values = torch.zeros(1)
-        next_state_values = (
-            next_state_values
-            if done
-            else self.target_net.forward(next_ob).max(1)[0].detach()
+        # get elements from batch
+        non_final_mask = 1 - torch.tensor(batch.done, dtype=torch.uint8)
+        non_final_mask = non_final_mask.type(torch.bool)
+        non_final_next_obs = torch.stack(
+            [ob for nonfinal, ob in zip(non_final_mask, batch.next_ob) if nonfinal]
+        )
+        ob_batch = torch.stack(batch.ob)
+        rew_batch = torch.stack(batch.rew)
+        action_batch = torch.stack(batch.action)
+
+        # estimate Q(st, a) with the policy network
+        state_action_values = self.policy_net.forward(ob_batch).gather(1, action_batch)
+
+        # estimate V(st+1) with target network
+        next_state_values = torch.zeros(self.action_batch)
+        next_state_values[non_final_mask] = (
+            self.target_net.forward(non_final_next_obs).max(1)[0].detach()
         )
 
-        if state_action_values.shape != next_state_values.shape:
-            # fmt: off
-            import IPython ; IPython.embed()
-            # fmt: on
-
         # expected Q value
-        expected_state_action_values = rew + self.gamma * next_state_values
+        expected_state_action_values = rew_batch + self.gamma * next_state_values
 
         # loss
-        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values)
+        loss = F.smooth_l1_loss(
+            state_action_values.squeeze(), expected_state_action_values
+        )
 
         # optimize the network
         self.optimizer.zero_grad()
@@ -163,11 +183,13 @@ class Agent(object):
 
         ob : frame from the game
         """
-        # preprocess imgs
-        ob = self.preprocess_img(ob)
+        # preprocess ob
+        ob = self.preprocess_ob(ob, batch_form=True)
 
         # forward
+        ##########################################################################################################################
         # TODO: epsilon greedy
+        ##########################################################################################################################
         action = self.policy_net.forward(ob).argmax().item()
 
         return action
@@ -199,13 +221,31 @@ class Agent(object):
         self.policy_net.load_state_dict(torch.load(path))
         self.policy_net.eval()
 
-    def preprocess_img(self, imgs: np.ndarray) -> Tensor:
+    def push_to_memory(self, ob, action, next_ob, reward, done):
+        """
+        Push a Transition to memory
+        """
+        # preprocess observations
+        ob = self.preprocess_ob(ob, batch_form=False)
+        next_ob = self.preprocess_ob(next_ob, batch_form=False)
+
+        # save to memory
+        action = torch.Tensor([[action]]).long()
+        reward = torch.tensor([reward], dtype=torch.float32)
+        next_ob.float()
+        ob.float()
+        self.memory.push(ob, action, next_ob, reward, done)
+
+    def preprocess_ob(self, ob: np.ndarray, batch_form=True) -> Tensor:
         """
         Preprocess image(s)
         """
         # grayscale image
-        ob_gray = my_utils.rgb2grayscale(imgs, self.player_id)
-        ob_gray = np.expand_dims(ob_gray, 0)
-        ob_gray = torch.Tensor(ob_gray)
+        ob_gray = my_utils.rgb2grayscale(ob, self.player_id)
+
+        # transform into batch if requested
+        if batch_form:
+            ob_gray = np.expand_dims(ob_gray, 0)
+            ob_gray = torch.Tensor(ob_gray)
 
         return ob_gray

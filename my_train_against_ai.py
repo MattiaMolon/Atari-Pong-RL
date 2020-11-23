@@ -52,6 +52,7 @@ for ep in range(0, episodes):
         (next_ob, _), (rew, _), done, info = env.step((action1, action2))
 
         # update agent policy
+        player.push_to_memory(ob, action1, rew, next_ob, done)
         player.update(ob, action1, next_ob, rew, done)
 
         # move to next observation
@@ -66,14 +67,14 @@ for ep in range(0, episodes):
             env.render()
 
     # Update training image
-    print(f"Episode {ep} finised")
-    if ep % 5 == 0:
+    print(f"Episode {ep+1} finised")
+    if (ep + 1) % 10 == 0:
         my_utils.plot_winsratio(wins, "Training process")
 
     # update target_net
-    if ep % TARGET_UPDATE == 0:
+    if (ep + 1) % TARGET_UPDATE == 0:
         player.update_target_network()
 
     # Save the policy
-    if ep % 1000 == 0:
-        torch.save(player.policy_net.state_dict(), "DQN_weights.ai")
+    if (ep + 1) % 1000 == 0:
+        torch.save(player.policy_net.state_dict(), "imgs/DQN_weights.ai")
