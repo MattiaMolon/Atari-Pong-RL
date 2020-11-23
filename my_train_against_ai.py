@@ -12,8 +12,8 @@ import torch
 from PIL import Image
 
 # CONFIGURATION VARIABLE
-TARGET_UPDATE = 5
-
+TARGET_UPDATE = 5  # update target_net every TARGET_UPDATE frames
+FRAME_STALL = 4  # update policy_net every FRAME_STALL frames
 
 # args parser
 parser = argparse.ArgumentParser()
@@ -42,6 +42,7 @@ for ep in range(0, episodes):
 
     done = False
     (ob, _) = env.reset()
+    frame = 0
     while not done:
 
         # Get the actions from both SimpleAIs
@@ -53,7 +54,9 @@ for ep in range(0, episodes):
 
         # update agent policy
         player.push_to_memory(ob, action1, rew, next_ob, done)
-        player.update(ob, action1, next_ob, rew, done)
+        frame += 1
+        if frame % FRAME_STALL == 0:
+            player.update_policy_net()
 
         # move to next observation
         ob = next_ob
@@ -73,7 +76,7 @@ for ep in range(0, episodes):
 
     # update target_net
     if (ep + 1) % TARGET_UPDATE == 0:
-        player.update_target_network()
+        player.update_target_net()
 
     # Save the policy
     if (ep + 1) % 1000 == 0:

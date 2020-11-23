@@ -121,7 +121,7 @@ class Agent(object):
         self.target_net.eval()
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=1e-3)
 
-    def update(self) -> None:
+    def update_policy_net(self) -> None:
         """
         Update policy network
         ------------
@@ -152,10 +152,15 @@ class Agent(object):
         state_action_values = self.policy_net.forward(ob_batch).gather(1, action_batch)
 
         # estimate V(st+1) with target network
-        next_state_values = torch.zeros(self.action_batch)
+        next_state_values = torch.zeros(self.batch_size)
         next_state_values[non_final_mask] = (
             self.target_net.forward(non_final_next_obs).max(1)[0].detach()
         )
+
+        if next_state_values.size != state_action_values.size:
+            # fmt: off
+            import IPython ; IPython.embed()
+            # fmt: on
 
         # expected Q value
         expected_state_action_values = rew_batch + self.gamma * next_state_values
@@ -173,7 +178,13 @@ class Agent(object):
             param.grad.data.clamp_(-1e-1, 1e-1)
         self.optimizer.step()
 
-    def get_action(self, ob=None) -> int:
+    def update_target_net(self) -> None:
+        """
+        Update target net
+        """
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+
+    def get_action(self, ob: np.ndarray = None, epsilon: float = 0.1) -> int:
         """
         Interface function that returns the action that the agent took based
         on the observation ob
@@ -186,11 +197,12 @@ class Agent(object):
         # preprocess ob
         ob = self.preprocess_ob(ob, batch_form=True)
 
-        # forward
-        ##########################################################################################################################
-        # TODO: epsilon greedy
-        ##########################################################################################################################
-        action = self.policy_net.forward(ob).argmax().item()
+        # epsilon greedy action selection
+        # TODO: use glie
+        if np.random.rand() < epsilon:
+            action = np.random.randint(0, 4)
+        else:
+            action = self.policy_net.forward(ob).argmax().item()
 
         return action
 
@@ -199,12 +211,6 @@ class Agent(object):
         Interface function to retrieve the agents name
         """
         return self.name
-
-    def update_target_network(self) -> None:
-        """
-        Update target net
-        """
-        self.target_net.load_state_dict(self.policy_net.state_dict())
 
     def reset(self) -> None:
         """
@@ -221,7 +227,7 @@ class Agent(object):
         self.policy_net.load_state_dict(torch.load(path))
         self.policy_net.eval()
 
-    def push_to_memory(self, ob, action, next_ob, reward, done):
+    def push_to_memory(self, ob, action, reward, next_ob, done):
         """
         Push a Transition to memory
         """
@@ -230,10 +236,10 @@ class Agent(object):
         next_ob = self.preprocess_ob(next_ob, batch_form=False)
 
         # save to memory
-        action = torch.Tensor([[action]]).long()
+        action = torch.Tensor([action]).long()
         reward = torch.tensor([reward], dtype=torch.float32)
-        next_ob.float()
-        ob.float()
+        next_ob = torch.from_numpy(next_ob).float()
+        ob = torch.from_numpy(ob).float()
         self.memory.push(ob, action, next_ob, reward, done)
 
     def preprocess_ob(self, ob: np.ndarray, batch_form=True) -> Tensor:
