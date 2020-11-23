@@ -1,3 +1,4 @@
+import re
 import matplotlib.pyplot as plt
 from random import randint
 import pickle
@@ -7,7 +8,12 @@ import argparse
 import wimblepong
 import my_agent
 import my_utils
+import torch
 from PIL import Image
+
+# CONFIGURATION VARIABLE
+TARGET_UPDATE = 5
+
 
 # args parser
 parser = argparse.ArgumentParser()
@@ -32,7 +38,7 @@ env.set_names(player.get_name(), opponent.get_name())
 
 # start training
 wins = [0]
-for i in range(0, episodes):
+for ep in range(0, episodes):
 
     done = False
     (ob, _) = env.reset()
@@ -45,6 +51,9 @@ for i in range(0, episodes):
         # Step the environment and get the rewards and new observations
         (next_ob, _), (rew, _), done, info = env.step((action1, action2))
 
+        # update agent policy
+        player.update(ob, action1, next_ob, rew, done)
+
         # move to next observation
         ob = next_ob
 
@@ -56,9 +65,15 @@ for i in range(0, episodes):
         if not args.headless:
             env.render()
 
-        # reset env and
-        if done:
-            observation = env.reset()
-            print(f"Episode {i} finised")
-            if i % 5 == 0:
-                my_utils.plot_winsratio(wins, "Training process")
+    # Update training image
+    print(f"Episode {ep} finised")
+    if ep % 5 == 0:
+        my_utils.plot_winsratio(wins, "Training process")
+
+    # update target_net
+    if ep % TARGET_UPDATE == 0:
+        player.update_target_network()
+
+    # Save the policy
+    if ep % 1000 == 0:
+        torch.save(player.policy_net.state_dict(), "DQN_weights.ai")
