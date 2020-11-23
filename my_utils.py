@@ -18,11 +18,15 @@ def plot_winsratio(wins, title, window_size=10):
     plt.savefig("imgs/train_ai.png")
 
 
-def rgb2grayscale(rgb: np.ndarray):
+def rgb2grayscale(rgb: np.ndarray, side):
 
+    # use correct side
+    if side != 1:
+        rgb = np.fliplr(rgb)
+
+    # transform to rgb
     r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
     grayscale = 0.2989 * r + 0.5870 * g + 0.1140 * b
     grayscale = np.expand_dims(grayscale, 0)
 
-    # TODO: flip image if id != 1
     return grayscale

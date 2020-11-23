@@ -35,20 +35,22 @@ wins = [0]
 for i in range(0, episodes):
 
     done = False
-    (ob1, ob2) = env.reset()
+    (ob, _) = env.reset()
     while not done:
 
         # Get the actions from both SimpleAIs
-        action1 = player.get_action(ob1)
-        print(action1)
+        action1 = player.get_action(ob)
         action2 = opponent.get_action()
 
         # Step the environment and get the rewards and new observations
-        (ob1, ob2), (rew1, rew2), done, info = env.step((action1, action2))
+        (next_ob, _), (rew, _), done, info = env.step((action1, action2))
+
+        # move to next observation
+        ob = next_ob
 
         # Count the wins
-        if rew1 != 0:
-            wins.append(1) if rew1 == 10 else wins.append(0)
+        if rew != 0:
+            wins.append(1) if rew == 10 else wins.append(0)
 
         # render the frames
         if not args.headless:
