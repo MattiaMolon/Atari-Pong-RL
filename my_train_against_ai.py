@@ -23,9 +23,9 @@ env.unwrapped.fps = args.fps
 episodes = 100000  # Number of episodes/games to play
 
 # Define the player IDs for both agents
-# player = my_agent.Agent(env, 1)
+player = my_agent.Agent(env, 1)
 opponent = wimblepong.SimpleAi(env, 2)
-player = wimblepong.SimpleAi(env, 1)
+# player = wimblepong.SimpleAi(env, 1)
 
 # Set the names for both SimpleAIs
 env.set_names(player.get_name(), opponent.get_name())
@@ -35,10 +35,12 @@ wins = [0]
 for i in range(0, episodes):
 
     done = False
+    (ob1, ob2) = env.reset()
     while not done:
 
         # Get the actions from both SimpleAIs
-        action1 = player.get_action()
+        action1 = player.get_action(ob1)
+        print(action1)
         action2 = opponent.get_action()
 
         # Step the environment and get the rewards and new observations
