@@ -3,23 +3,31 @@ import numpy as np
 import random
 from collections import namedtuple
 
+from torch._C import dtype
 
-def plot_winsratio(wins, title, window_size=10):
+
+def plot_winsratio(wins, title, window_size=50):
     """
-    Plots total win ratio + moving average for the last 10 matches
+    Plots total win ratio + moving average for the last 50 matches
     """
+    # parameters
+    cumulative_wins = np.cumsum(wins, dtype=float)
+    indx = np.array([i + 1 for i in range(len(wins))], dtype=float)
+
+    # plot
     plt.figure(2)
     plt.clf()
     plt.title(f"Training {title}")
-    plt.xlabel("Episode")
-    plt.ylabel("Wins")
-    plt.plot(wins)
-    # Take 10 episode averages and plot them too
-    if len(wins) >= 10:
-        means = np.cumsum(wins, dtype="float")
+    plt.xlabel("Episodes")
+    plt.ylabel("WR")
+    plt.plot(cumulative_wins / indx, label="Total WR")
+    # Take 100 episode averages and plot them too
+    if len(wins) >= window_size:
+        means = cumulative_wins
         means[window_size:] = means[window_size:] - means[:-window_size]
-        plt.plot(means[window_size - 1 :] / window_size)
+        plt.plot(means[window_size - 1 :] / window_size, label="Running average WR")
 
+    plt.legend()
     plt.savefig("imgs/train_ai.png")
 
 

@@ -6,11 +6,17 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import random
-import my_utils
 
 from torch.tensor import Tensor
-from my_utils import Transition, ReplayMemory
+from my_utils import Transition, ReplayMemory, rgb2grayscale
 from wimblepong import Wimblepong
+
+
+# check for cuda
+if torch.cuda.is_available():
+    device = "cuda:0"
+else:
+    device = "cpu"
 
 
 # DQN architecture
@@ -89,7 +95,7 @@ class Agent(object):
         env,
         player_id: int = 1,
         name: str = "\(°_°')/",
-        batch_size: int = 32,
+        batch_size: int = 16,
         gamma: float = 0.98,
         memory_size: int = 10000,
     ) -> None:
@@ -116,8 +122,12 @@ class Agent(object):
         self.memory = ReplayMemory(self.memory_size)
 
         # networks
-        self.policy_net = DQN(action_space_dim=3, hidden_dim=128)
-        self.target_net = DQN(action_space_dim=3, hidden_dim=128)
+        self.policy_net = DQN(action_space_dim=3, hidden_dim=128).to(
+            torch.device(device)
+        )
+        self.target_net = DQN(action_space_dim=3, hidden_dim=128).to(
+            torch.device(device)
+        )
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=1e-3)
@@ -182,7 +192,9 @@ class Agent(object):
         """
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
-    def get_action(self, ob: np.ndarray = None, epsilon: float = 0.1) -> int:
+    def get_action(
+        self, ob: np.ndarray = None, epsilon: float = 0.1, train: bool = False
+    ) -> int:
         """
         Interface function that returns the action that the agent took based
         on the observation ob
@@ -196,9 +208,11 @@ class Agent(object):
         ob = self.preprocess_ob(ob, batch_form=True)
 
         # epsilon greedy action selection
-        # TODO: use glie
-        if np.random.rand() < epsilon:
-            action = np.random.randint(0, 3)
+        if train:
+            if np.random.rand() < epsilon:
+                action = np.random.randint(0, 3)
+            else:
+                action = self.policy_net.forward(ob).argmax().item()
         else:
             action = self.policy_net.forward(ob).argmax().item()
 
@@ -234,10 +248,10 @@ class Agent(object):
         next_ob = self.preprocess_ob(next_ob, batch_form=False)
 
         # save to memory
-        action = torch.Tensor([action]).long()
-        reward = torch.tensor([reward], dtype=torch.float32)
-        next_ob = torch.from_numpy(next_ob).float()
-        ob = torch.from_numpy(ob).float()
+        action = torch.Tensor([action]).long().to(torch.device(device))
+        reward = torch.tensor([reward], dtype=torch.float32).to(torch.device(device))
+        next_ob = torch.from_numpy(next_ob).float().to(torch.device(device))
+        ob = torch.from_numpy(ob).float().to(torch.device(device))
         self.memory.push(ob, action, next_ob, reward, done)
 
     def preprocess_ob(self, ob: np.ndarray, batch_form=True) -> Tensor:
@@ -245,11 +259,11 @@ class Agent(object):
         Preprocess image(s)
         """
         # grayscale image
-        ob_gray = my_utils.rgb2grayscale(ob, self.player_id)
+        ob_gray = rgb2grayscale(ob, self.player_id)
 
         # transform into batch if requested
         if batch_form:
             ob_gray = np.expand_dims(ob_gray, 0)
-            ob_gray = torch.Tensor(ob_gray)
+            ob_gray = torch.Tensor(ob_gray).to(torch.device(device))
 
         return ob_gray
