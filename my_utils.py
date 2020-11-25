@@ -31,19 +31,13 @@ def plot_winsratio(wins, title, window_size=50):
     plt.savefig("imgs/train_ai.png")
 
 
-def rgb2grayscale(rgb: np.ndarray, side):
+def rgb2grayscale(rgb: np.ndarray):
     """
-    transform rgb image to gray scale + it flips it if the game
-    is played in the opposite side in respect to the training
+    transform rgb image to gray scale
     """
-    # use correct side
-    if side != 1:
-        rgb = np.fliplr(rgb)
-
     # transform to rgb
     r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
     grayscale = 0.2989 * r + 0.5870 * g + 0.1140 * b
-    grayscale = np.expand_dims(grayscale, 0)
 
     return grayscale
 

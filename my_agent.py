@@ -7,6 +7,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import random
 
+from PIL import Image
 from torch.tensor import Tensor
 from my_utils import Transition, ReplayMemory, rgb2grayscale
 from wimblepong import Wimblepong
@@ -31,7 +32,7 @@ class DQN(nn.Module):
     forward() : compute forward pass in the network
     """
 
-    def __init__(self, action_space_dim=3, hidden_dim=128) -> None:
+    def __init__(self, action_space_dim=3, hidden_dim=256) -> None:
         """
         Initialization of the DQN
         ------------
@@ -51,11 +52,10 @@ class DQN(nn.Module):
         # DNN architecture
         # cnv -> convolutional
         # fc -> fully connected
-        self.cnv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=8)
-        self.cnv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=4)
-        self.cnv3 = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=4)
+        self.cnv1 = nn.Conv2d(in_channels=4, out_channels=16, kernel_size=8, stride=4)
+        self.cnv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=4, stride=2)
         self.flat1 = nn.Flatten()
-        self.fc1 = nn.Linear(32 * 21 * 21, self.hidden_dim)
+        self.fc1 = nn.Linear(2592, self.hidden_dim)
         self.fc2 = nn.Linear(self.hidden_dim, action_space_dim)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -67,12 +67,12 @@ class DQN(nn.Module):
 
         x : input image to feed forward into the network
         """
-        x = F.max_pool2d(F.relu(self.cnv1(x)), (2, 2))
-        x = F.max_pool2d(F.relu(self.cnv2(x)), (2, 2))
-        x = F.max_pool2d(F.relu(self.cnv3(x)), (2, 2))
+        x = F.relu(self.cnv1(x))
+        x = F.relu(self.cnv2(x))
         x = self.flat1(x)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
+
         return x
 
 
@@ -95,9 +95,9 @@ class Agent(object):
         env,
         player_id: int = 1,
         name: str = "\(°_°')/",
-        batch_size: int = 16,
-        gamma: float = 0.98,
-        memory_size: int = 10000,
+        batch_size: int = 64,
+        gamma: float = 0.95,
+        memory_size: int = 50000,
     ) -> None:
         """
         Initialization of the Agent
@@ -122,10 +122,10 @@ class Agent(object):
         self.memory = ReplayMemory(self.memory_size)
 
         # networks
-        self.policy_net = DQN(action_space_dim=3, hidden_dim=128).to(
+        self.policy_net = DQN(action_space_dim=3, hidden_dim=256).to(
             torch.device(device)
         )
-        self.target_net = DQN(action_space_dim=3, hidden_dim=128).to(
+        self.target_net = DQN(action_space_dim=3, hidden_dim=256).to(
             torch.device(device)
         )
         self.target_net.load_state_dict(self.policy_net.state_dict())
@@ -205,7 +205,8 @@ class Agent(object):
         ob : frame from the game
         """
         # preprocess ob
-        ob = self.preprocess_ob(ob, batch_form=True)
+        ob = self.preprocess_ob(ob)
+        ob = ob.unsqueeze(0)
 
         # epsilon greedy action selection
         if train:
@@ -236,7 +237,9 @@ class Agent(object):
         Load model from file
         """
         # TODO: change path before sending
-        self.policy_net.load_state_dict(torch.load(path))
+        self.policy_net.load_state_dict(
+            torch.load(path, map_location=torch.device(device))
+        )
         self.policy_net.eval()
 
     def push_to_memory(self, ob, action, reward, next_ob, done):
@@ -244,26 +247,35 @@ class Agent(object):
         Push a Transition to memory
         """
         # preprocess observations
-        ob = self.preprocess_ob(ob, batch_form=False)
-        next_ob = self.preprocess_ob(next_ob, batch_form=False)
+        ob = self.preprocess_ob(ob)
+        next_ob = self.preprocess_ob(next_ob)
 
         # save to memory
         action = torch.Tensor([action]).long().to(torch.device(device))
         reward = torch.tensor([reward], dtype=torch.float32).to(torch.device(device))
-        next_ob = torch.from_numpy(next_ob).float().to(torch.device(device))
-        ob = torch.from_numpy(ob).float().to(torch.device(device))
         self.memory.push(ob, action, next_ob, reward, done)
 
-    def preprocess_ob(self, ob: np.ndarray, batch_form=True) -> Tensor:
+    def preprocess_ob(self, ob: np.ndarray) -> Tensor:
         """
-        Preprocess image(s)
+        Preprocess image:
+        - shrink the image to 84x84
+        - transform it to grayscale
+        - transform it into a Tensor
+        - stack images
         """
+        # shrink image
+        ob = Image.fromarray(ob)
+        ob = ob.resize((84, 84))
+        ob = np.asarray(ob)
+
         # grayscale image
-        ob_gray = rgb2grayscale(ob, self.player_id)
+        ob = rgb2grayscale(ob)
 
-        # transform into batch if requested
-        if batch_form:
-            ob_gray = np.expand_dims(ob_gray, 0)
-            ob_gray = torch.Tensor(ob_gray).to(torch.device(device))
+        # Tensor definition
+        ob = torch.from_numpy(ob).float().to(torch.device(device))
 
-        return ob_gray
+        # stack images for imput to the network
+        # TODO: stack correct images!
+        ob = torch.stack((ob, ob, ob, ob))
+
+        return ob
