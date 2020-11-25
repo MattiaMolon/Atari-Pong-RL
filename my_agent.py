@@ -151,14 +151,16 @@ class Agent(object):
         batch = Transition(*zip(*transitions))
 
         # get elements from batch
-        non_final_mask = 1 - torch.tensor(batch.done, dtype=torch.uint8)
+        non_final_mask = 1 - torch.tensor(batch.done, dtype=torch.uint8).to(
+            torch.device(device)
+        )
         non_final_mask = non_final_mask.type(torch.bool)
         non_final_next_obs = torch.stack(
             [ob for nonfinal, ob in zip(non_final_mask, batch.next_ob) if nonfinal]
-        )
-        ob_batch = torch.stack(batch.ob)
-        rew_batch = torch.stack(batch.rew)
-        action_batch = torch.stack(batch.action)
+        ).to(torch.device(device))
+        ob_batch = torch.stack(batch.ob).to(torch.device(device))
+        rew_batch = torch.stack(batch.rew).to(torch.device(device))
+        action_batch = torch.stack(batch.action).to(torch.device(device))
 
         # estimate Q(st, a) with the policy network
         state_action_values = (
@@ -166,7 +168,7 @@ class Agent(object):
         )
 
         # estimate V(st+1) with target network
-        next_state_values = torch.zeros(self.batch_size)
+        next_state_values = torch.zeros(self.batch_size).to(torch.device(device))
         next_state_values[non_final_mask] = (
             self.target_net.forward(non_final_next_obs).max(1)[0].detach()
         )
@@ -292,6 +294,7 @@ class Agent(object):
         Get tensor of stacked observations to predict an action
         """
         # TODO: WE WILL NOT HAVE THE BUFFER DURING TESTING! FIX THIS
+        ob = self.preprocess_ob(ob)
 
         # get observations from buffer
         obs = (
@@ -306,6 +309,10 @@ class Agent(object):
 
         # stack observations and return them
         ob_stack = torch.stack(obs).to(torch.device(device))
+
+        # fmt: off
+        import IPython ; IPython.embed()
+        # fmt: on
 
         return ob_stack
 
