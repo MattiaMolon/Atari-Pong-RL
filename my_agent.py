@@ -1,5 +1,6 @@
 from math import exp
 import random
+from typing import Any
 import numpy as np
 import torch
 import torch.nn as nn
@@ -119,7 +120,7 @@ class Agent(object):
         self.batch_size = batch_size  # size of batch for update
         self.gamma = gamma  # discount factor
         self.memory_size = memory_size  # size of replay memory
-        self.memory = ReplayMemory(self.memory_size)
+        self.memory = ReplayMemory(self.memory_size, 4)
 
         # networks
         self.policy_net = DQN(action_space_dim=3, hidden_dim=256).to(
@@ -181,7 +182,6 @@ class Agent(object):
         # optimize the network
         self.optimizer.zero_grad()
         loss.backward()
-        # TODO: check if these values are limiting too much
         for param in self.policy_net.parameters():
             param.grad.data.clamp_(-1e-1, 1e-1)
         self.optimizer.step()
@@ -204,17 +204,16 @@ class Agent(object):
 
         ob : frame from the game
         """
-        # preprocess ob
-        ob = self.preprocess_ob(ob)
-        ob = ob.unsqueeze(0)
 
         # epsilon greedy action selection
-        if train:
-            if np.random.rand() < epsilon:
-                action = np.random.randint(0, 3)
-            else:
-                action = self.policy_net.forward(ob).argmax().item()
+        if train and np.random.rand() < epsilon:
+            action = np.random.randint(0, 3)
         else:
+            # preprocess ob
+            ob = self.get_action_from_buffer(ob)
+            ob = ob.unsqueeze(0)
+
+            # predict best action
             action = self.policy_net.forward(ob).argmax().item()
 
         return action
@@ -227,10 +226,9 @@ class Agent(object):
 
     def reset(self) -> None:
         """
-        ???
+        clean the buffer of the memory
         """
-        # Nothing to do for now...
-        return
+        self.memory.buffer = []
 
     def load_model(self, path: str = "weights/DQN_weights.ai") -> None:
         """
@@ -242,18 +240,74 @@ class Agent(object):
         )
         self.policy_net.eval()
 
-    def push_to_memory(self, ob, action, reward, next_ob, done):
+    def push_to_buffer(self, ob, action, reward, next_ob, done) -> Any:
         """
-        Push a Transition to memory
+        Push a Transition to the memory buffer
         """
         # preprocess observations
         ob = self.preprocess_ob(ob)
         next_ob = self.preprocess_ob(next_ob)
 
-        # save to memory
+        # save to buffer
         action = torch.Tensor([action]).long().to(torch.device(device))
         reward = torch.tensor([reward], dtype=torch.float32).to(torch.device(device))
-        self.memory.push(ob, action, next_ob, reward, done)
+        self.memory.push_to_buffer(ob, action, next_ob, reward, done)
+
+        # check if I need to stack images
+        if len(self.memory.buffer) == self.memory.buffer_capacity or done:
+
+            # get the buffer and transition elements to push into memory
+            buffer = self.memory.buffer
+            ob_stack = torch.stack(
+                (buffer[0].ob, buffer[1].ob, buffer[2].ob, buffer[3].ob)
+            ).to(torch.device(device))
+            next_ob_stack = torch.stack(
+                (
+                    buffer[0].next_ob,
+                    buffer[1].next_ob,
+                    buffer[2].next_ob,
+                    buffer[3].next_ob,
+                )
+            ).to(torch.device(device))
+
+            # push to memory
+            self.memory.push_to_memory(
+                ob_stack,
+                buffer[3].action,
+                next_ob_stack,
+                buffer[3].rew,
+                buffer[3].done,
+            )
+
+            # if not done delete the firt row in the buffer
+            if not done:
+                self.memory.buffer = self.memory.buffer[1:]
+
+            # if done reset everything
+            if done:
+                self.reset()
+
+    def get_action_from_buffer(self, ob) -> Tensor:
+        """
+        Get tensor of stacked observations to predict an action
+        """
+        # TODO: WE WILL NOT HAVE THE BUFFER DURING TESTING! FIX THIS
+
+        # get observations from buffer
+        obs = (
+            [x.ob for x in self.memory.buffer] if len(self.memory.buffer) != 0 else [ob]
+        )
+
+        # I don't have filled the buffer yet
+        if len(self.memory.buffer) < self.memory.buffer_capacity:
+            # create new observations which do not exists
+            while len(obs) != self.memory.buffer_capacity:
+                obs.append(obs[-1])
+
+        # stack observations and return them
+        ob_stack = torch.stack(obs).to(torch.device(device))
+
+        return ob_stack
 
     def preprocess_ob(self, ob: np.ndarray) -> Tensor:
         """
@@ -261,7 +315,6 @@ class Agent(object):
         - shrink the image to 84x84
         - transform it to grayscale
         - transform it into a Tensor
-        - stack images
         """
         # shrink image
         ob = Image.fromarray(ob)
@@ -273,9 +326,5 @@ class Agent(object):
 
         # Tensor definition
         ob = torch.from_numpy(ob).float().to(torch.device(device))
-
-        # stack images for imput to the network
-        # TODO: stack correct images!
-        ob = torch.stack((ob, ob, ob, ob))
 
         return ob

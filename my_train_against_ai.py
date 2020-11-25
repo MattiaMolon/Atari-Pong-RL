@@ -70,8 +70,7 @@ for ep in range(0, episodes):
         # update agent policy
         frame += 1
         if args.train:
-            if frame % FRAME_STALL == 0 or done:
-                player.push_to_memory(ob, action1, rew, next_ob, done)
+            player.push_to_buffer(ob, action1, rew, next_ob, done)
             player.update_policy_net()
 
         # move to next observation

@@ -51,17 +51,25 @@ class ReplayMemory(object):
     It stores transitions.
     """
 
-    def __init__(self, capacity: int) -> None:
-        self.capacity = capacity
+    def __init__(self, memory_capacity: int, buffer_capacity: int) -> None:
+        self.memory_capacity = memory_capacity
+        self.buffer_capacity = buffer_capacity
         self.memory = []
-        self.position = 0
+        self.buffer = []
+        self.memory_position = 0
 
-    def push(self, *args) -> None:
+    def push_to_memory(self, *args) -> None:
         """Saves a transition."""
-        if len(self.memory) < self.capacity:
+        if len(self.memory) < self.memory_capacity:
             self.memory.append(None)
-        self.memory[self.position] = Transition(*args)
-        self.position = (self.position + 1) % self.capacity
+        self.memory[self.memory_position] = Transition(*args)
+        self.memory_position = (self.memory_position + 1) % self.memory_capacity
+
+    def push_to_buffer(self, *args) -> None:
+        """Saves a transition."""
+        self.buffer.append(Transition(*args))
+        if len(self.buffer) > self.buffer_capacity:
+            raise Exception("Error: capacity of the buffer exceded")
 
     def sample(self, batch_size: int) -> np.ndarray:
         return random.sample(self.memory, batch_size)
