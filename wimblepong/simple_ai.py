@@ -8,10 +8,10 @@ class SimpleAi(object):
             raise TypeError("I'm not a very smart AI. All I can play is Wimblepong.")
         self.env = env
         # Set the player id that determines on which side the ai is going to play
-        self.player_id = player_id  
+        self.player_id = player_id
         # Ball prediction error, introduce noise such that SimpleAI reflects not
         # only in straight lines
-        self.bpe = 4                
+        self.bpe = 4
         self.name = "SimpleAI"
 
     def get_name(self):
@@ -30,7 +30,7 @@ class SimpleAi(object):
         # Get own position in the game arena
         my_y = player.y
         # Get the ball position in the game arena
-        ball_y = self.env.ball.y + (random.random()*self.bpe-self.bpe/2)
+        ball_y = self.env.ball.y + (random.random() * self.bpe - self.bpe / 2)
 
         # Compute the difference in position and try to minimize it
         y_diff = my_y - ball_y
@@ -47,5 +47,3 @@ class SimpleAi(object):
     def reset(self):
         # Nothing to done for now...
         return
-
-

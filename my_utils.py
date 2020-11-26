@@ -6,29 +6,38 @@ from collections import namedtuple
 from torch._C import dtype
 
 
-def plot_winsratio(wins, title, window_size=50):
+def plot_winsratio(wins, title, wsize_mean=200, wsize_means_mean=100):
     """
-    Plots total win ratio + moving average for the last 50 matches
+    Plots moving average WR for the last 100 matches
     """
-    # parameters
-    cumulative_wins = np.cumsum(wins, dtype=float)
-    indx = np.array([i + 1 for i in range(len(wins))], dtype=float)
+    if len(wins) >= wsize_mean:
 
-    # plot
-    plt.figure(2)
-    plt.clf()
-    plt.title(f"Training {title}")
-    plt.xlabel("Episodes")
-    plt.ylabel("WR")
-    plt.plot(cumulative_wins / indx, label="Total WR")
-    # Take 100 episode averages and plot them too
-    if len(wins) >= window_size:
-        means = cumulative_wins
-        means[window_size:] = means[window_size:] - means[:-window_size]
-        plt.plot(means[window_size - 1 :] / window_size, label="Running average WR")
+        # Take 100 episode averages
+        means = np.cumsum(wins, dtype=float)
+        means[wsize_mean:] = means[wsize_mean:] - means[:-wsize_mean]
+        means = means[wsize_mean - 1 :] / wsize_mean
+        idxs = [i + wsize_mean - 1 for i in range(len(means))]
+        plt.plot(idxs, means, label=f"Running {wsize_mean} average WR")
 
-    plt.legend()
-    plt.savefig("imgs/train_ai.png")
+        # Take 20 episode averages of the 100 running average
+        if len(means) >= wsize_means_mean:
+            means_mean = np.cumsum(means)
+            means_mean[wsize_means_mean:] = (
+                means_mean[wsize_means_mean:] - means_mean[:-wsize_means_mean]
+            )
+            means_mean = means_mean[wsize_means_mean - 1 :] / wsize_means_mean
+            idxs_mean = [
+                i + wsize_mean + wsize_means_mean - 2 for i in range(len(means_mean))
+            ]
+            plt.plot(
+                idxs_mean,
+                means_mean,
+                label=f"Running {wsize_mean} average WR mean",
+            )
+
+        plt.legend()
+        plt.savefig("imgs/train_ai.png")
+        plt.close()
 
 
 def rgb2grayscale(rgb: np.ndarray):

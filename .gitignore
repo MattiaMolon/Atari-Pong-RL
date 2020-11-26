@@ -352,3 +352,4 @@ MigrationBackup/
 # @MattiaMolon
 my_weights/
 .vscode
+test.py

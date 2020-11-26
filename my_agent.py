@@ -56,8 +56,14 @@ class DQN(nn.Module):
         self.cnv1 = nn.Conv2d(in_channels=4, out_channels=16, kernel_size=8, stride=4)
         self.cnv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=4, stride=2)
         self.flat1 = nn.Flatten()
-        self.fc1 = nn.Linear(2592, self.hidden_dim)
+        self.fc1 = nn.Linear(3872, self.hidden_dim)
         self.fc2 = nn.Linear(self.hidden_dim, action_space_dim)
+
+        # initialization weights
+        torch.nn.init.normal_(self.cnv1.weight)
+        torch.nn.init.normal_(self.cnv2.weight)
+        torch.nn.init.normal_(self.fc1.weight)
+        torch.nn.init.normal_(self.fc2.weight)
 
     def forward(self, x: Tensor) -> Tensor:
         """
@@ -96,9 +102,9 @@ class Agent(object):
         env,
         player_id: int = 1,
         name: str = "\(°_°')/",
-        batch_size: int = 64,
-        gamma: float = 0.95,
-        memory_size: int = 50000,
+        batch_size: int = 128,
+        gamma: float = 0.98,
+        memory_size: int = 40000,
     ) -> None:
         """
         Initialization of the Agent
@@ -131,7 +137,7 @@ class Agent(object):
         )
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
-        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=1e-3)
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=1e-4)
 
     def update_policy_net(self) -> None:
         """
@@ -185,7 +191,7 @@ class Agent(object):
         self.optimizer.zero_grad()
         loss.backward()
         for param in self.policy_net.parameters():
-            param.grad.data.clamp_(-1e-1, 1e-1)
+            param.grad.data.clamp_(-0.1, 0.1)
         self.optimizer.step()
 
     def update_target_net(self) -> None:
@@ -216,7 +222,8 @@ class Agent(object):
             ob = ob.unsqueeze(0)
 
             # predict best action
-            action = self.policy_net.forward(ob).argmax().item()
+            with torch.no_grad():
+                action = self.policy_net.forward(ob).argmax().item()
 
         return action
 
@@ -300,6 +307,7 @@ class Agent(object):
         obs = (
             [x.ob for x in self.memory.buffer] if len(self.memory.buffer) != 0 else [ob]
         )
+        obs.append(ob)
 
         # I don't have filled the buffer yet
         if len(self.memory.buffer) < self.memory.buffer_capacity:
@@ -310,26 +318,24 @@ class Agent(object):
         # stack observations and return them
         ob_stack = torch.stack(obs).to(torch.device(device))
 
-        # fmt: off
-        import IPython ; IPython.embed()
-        # fmt: on
-
         return ob_stack
 
     def preprocess_ob(self, ob: np.ndarray) -> Tensor:
         """
         Preprocess image:
-        - shrink the image to 84x84
-        - transform it to grayscale
+        - shrink the image to 100x100
+        - transform it to black and white
         - transform it into a Tensor
         """
         # shrink image
         ob = Image.fromarray(ob)
-        ob = ob.resize((84, 84))
+        ob = ob.resize((100, 100))
         ob = np.asarray(ob)
 
         # grayscale image
         ob = rgb2grayscale(ob)
+        ob[ob != ob[0][0]] = 1
+        ob[ob == ob[0][0]] = 0
 
         # Tensor definition
         ob = torch.from_numpy(ob).float().to(torch.device(device))
