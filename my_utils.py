@@ -3,10 +3,8 @@ import numpy as np
 import random
 from collections import namedtuple
 
-from torch._C import dtype
 
-
-def plot_winsratio(wins, title, wsize_mean=200, wsize_means_mean=100):
+def plot_winsratio(wins, title, start_idx, wsize_mean=100, wsize_means_mean=1000):
     """
     Plots moving average WR for the last 100 matches
     """
@@ -16,7 +14,7 @@ def plot_winsratio(wins, title, wsize_mean=200, wsize_means_mean=100):
         means = np.cumsum(wins, dtype=float)
         means[wsize_mean:] = means[wsize_mean:] - means[:-wsize_mean]
         means = means[wsize_mean - 1 :] / wsize_mean
-        idxs = [i + wsize_mean - 1 for i in range(len(means))]
+        idxs = [i + start_idx + wsize_mean - 1 for i in range(len(means))]
         plt.plot(idxs, means, label=f"Running {wsize_mean} average WR")
 
         # Take 20 episode averages of the 100 running average
@@ -27,7 +25,8 @@ def plot_winsratio(wins, title, wsize_mean=200, wsize_means_mean=100):
             )
             means_mean = means_mean[wsize_means_mean - 1 :] / wsize_means_mean
             idxs_mean = [
-                i + wsize_mean + wsize_means_mean - 2 for i in range(len(means_mean))
+                i + start_idx + wsize_mean + wsize_means_mean - 2
+                for i in range(len(means_mean))
             ]
             plt.plot(
                 idxs_mean,
@@ -36,6 +35,7 @@ def plot_winsratio(wins, title, wsize_mean=200, wsize_means_mean=100):
             )
 
         plt.legend()
+        plt.title(f"Training {title}")
         plt.savefig("imgs/train_ai.png")
         plt.close()
 
@@ -60,11 +60,18 @@ class ReplayMemory(object):
     It stores transitions.
     """
 
-    def __init__(self, memory_capacity: int, buffer_capacity: int) -> None:
+    def __init__(
+        self,
+        memory_capacity: int,
+        train_buffer_capacity: int,
+        test_buffer_capacity: int,
+    ) -> None:
         self.memory_capacity = memory_capacity
-        self.buffer_capacity = buffer_capacity
+        self.train_buffer_capacity = train_buffer_capacity
+        self.test_buffer_capacity = test_buffer_capacity
         self.memory = []
-        self.buffer = []
+        self.train_buffer = []
+        self.test_buffer = []
         self.memory_position = 0
 
     def push_to_memory(self, *args) -> None:
@@ -74,11 +81,17 @@ class ReplayMemory(object):
         self.memory[self.memory_position] = Transition(*args)
         self.memory_position = (self.memory_position + 1) % self.memory_capacity
 
-    def push_to_buffer(self, *args) -> None:
-        """Saves a transition."""
-        self.buffer.append(Transition(*args))
-        if len(self.buffer) > self.buffer_capacity:
-            raise Exception("Error: capacity of the buffer exceded")
+    def push_to_train_buffer(self, *args) -> None:
+        """Saves a transition to train buffer."""
+        self.train_buffer.append(Transition(*args))
+        if len(self.train_buffer) > self.buffer_capacity:
+            raise Exception("Error: capacity of the train_buffer exceded")
+
+    def push_to_test_buffer(self, ob) -> None:
+        """Saves an observation to test buffer"""
+        self.test_buffer.append(ob)
+        if len(self.test_buffer) > self.test_buffer_capacity:
+            raise Exception("Error: capacity of the test_buffer exceded")
 
     def sample(self, batch_size: int) -> np.ndarray:
         return random.sample(self.memory, batch_size)

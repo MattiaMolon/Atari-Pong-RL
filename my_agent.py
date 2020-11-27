@@ -1,12 +1,9 @@
-from math import exp
-import random
 from typing import Any
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import random
 
 from PIL import Image
 from torch.tensor import Tensor
@@ -19,9 +16,9 @@ if torch.cuda.is_available():
     device = "cuda:0"
 else:
     device = "cpu"
+    # DQN architecture
 
 
-# DQN architecture
 class DQN(nn.Module):
     """
     Defines the structure of the DQN architecture used to train the agent
@@ -99,7 +96,6 @@ class Agent(object):
 
     def __init__(
         self,
-        env,
         player_id: int = 1,
         name: str = "\(°_°')/",
         batch_size: int = 128,
@@ -115,18 +111,15 @@ class Agent(object):
         env : environment in which the agent operates, must be Wimblepong \n
         player_id : id assigned to the player, id determines on which side the ai is going to play
         """
-        # check if environment is correct
-        if type(env) is not Wimblepong:
-            raise TypeError("I'm not a very smart AI. All I can play is Wimblepong.")
-
         # list of parameters of the agent
-        self.env = env
         self.player_id = player_id
         self.name = name
         self.batch_size = batch_size  # size of batch for update
         self.gamma = gamma  # discount factor
         self.memory_size = memory_size  # size of replay memory
-        self.memory = ReplayMemory(self.memory_size, 4)
+        self.memory = ReplayMemory(
+            self.memory_size, train_buffer_capacity=4, test_buffer_capacity=4
+        )
 
         # networks
         self.policy_net = DQN(action_space_dim=3, hidden_dim=256).to(
@@ -217,13 +210,19 @@ class Agent(object):
         if train and np.random.rand() < epsilon:
             action = np.random.randint(0, 3)
         else:
-            # preprocess ob
-            ob = self.get_action_from_buffer(ob)
-            ob = ob.unsqueeze(0)
+            # get stack of obeservations
+            if train:
+                ob_stack = self.get_stack_from_train_buffer(ob)
+            else:
+                ob_stack = self.get_stack_from_test_buffer(ob)
+            ob_stack = ob_stack.unsqueeze(0)
 
             # predict best action
             with torch.no_grad():
-                action = self.policy_net.forward(ob).argmax().item()
+                action = self.policy_net.forward(ob_stack).argmax().item()
+
+        if not train:
+            self.push_to_test_buffer(ob)
 
         return action
 
@@ -235,11 +234,12 @@ class Agent(object):
 
     def reset(self) -> None:
         """
-        clean the buffer of the memory
+        clean the buffers of the memory
         """
-        self.memory.buffer = []
+        self.memory.test_buffer = []
+        self.memory.train_buffer = []
 
-    def load_model(self, path: str = "weights/DQN_weights.ai") -> None:
+    def load_model(self, path: str = "weights/DQN_baseline.ai") -> None:
         """
         Load model from file
         """
@@ -248,10 +248,14 @@ class Agent(object):
             torch.load(path, map_location=torch.device(device))
         )
         self.policy_net.eval()
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.target_net.eval()
 
-    def push_to_buffer(self, ob, action, reward, next_ob, done) -> Any:
+    def push_to_train_buffer(
+        self, ob: np.ndarray, action: int, reward: int, next_ob: np.ndarray, done: bool
+    ) -> Any:
         """
-        Push a Transition to the memory buffer
+        Push a Transition to the memory train buffer
         """
         # preprocess observations
         ob = self.preprocess_ob(ob)
@@ -260,13 +264,13 @@ class Agent(object):
         # save to buffer
         action = torch.Tensor([action]).long().to(torch.device(device))
         reward = torch.tensor([reward], dtype=torch.float32).to(torch.device(device))
-        self.memory.push_to_buffer(ob, action, next_ob, reward, done)
+        self.memory.push_to_test_buffer(ob, action, next_ob, reward, done)
 
-        # check if I need to stack images
-        if len(self.memory.buffer) == self.memory.buffer_capacity or done:
+        # check if I need to push to memory
+        if len(self.memory.train_buffer) == self.memory.buffer_capacity or done:
 
             # get the buffer and transition elements to push into memory
-            buffer = self.memory.buffer
+            buffer = self.memory.train_buffer
             ob_stack = torch.stack(
                 (buffer[0].ob, buffer[1].ob, buffer[2].ob, buffer[3].ob)
             ).to(torch.device(device))
@@ -290,30 +294,64 @@ class Agent(object):
 
             # if not done delete the firt row in the buffer
             if not done:
-                self.memory.buffer = self.memory.buffer[1:]
+                self.memory.train_buffer = self.memory.train_buffer[1:]
 
             # if done reset everything
             if done:
                 self.reset()
 
-    def get_action_from_buffer(self, ob) -> Tensor:
+    def push_to_test_buffer(self, ob: np.ndarray) -> Any:
         """
-        Get tensor of stacked observations to predict an action
+        Push a Transition to the test buffer
         """
-        # TODO: WE WILL NOT HAVE THE BUFFER DURING TESTING! FIX THIS
+        # preprocess observation and push to test buffer
+        ob = self.preprocess_ob(ob)
+        self.memory.push_to_test_buffer(ob)
+
+        # check if I have filled it
+        if len(self.memory.test_buffer) == self.memory.test_buffer_capacity:
+            self.memory.test_buffer = self.memory.test_buffer[1:]
+
+    def get_stack_from_train_buffer(self, ob) -> Tensor:
+        """
+        Get tensor of stacked observations to predict an action from train buffer
+        """
         ob = self.preprocess_ob(ob)
 
-        # get observations from buffer
+        # get observations from train buffer
         obs = (
-            [x.ob for x in self.memory.buffer] if len(self.memory.buffer) != 0 else [ob]
+            [x.ob for x in self.memory.train_buffer]
+            if len(self.memory.train_buffer) != 0
+            else [ob]
         )
         obs.append(ob)
 
-        # I don't have filled the buffer yet
-        if len(self.memory.buffer) < self.memory.buffer_capacity:
-            # create new observations which do not exists
-            while len(obs) != self.memory.buffer_capacity:
-                obs.append(obs[-1])
+        # complete the sequence
+        while len(obs) != self.memory.train_buffer_capacity:
+            obs.append(obs[-1])
+
+        # stack observations and return them
+        ob_stack = torch.stack(obs).to(torch.device(device))
+
+        return ob_stack
+
+    def get_stack_from_test_buffer(self, ob: np.ndarray) -> Tensor:
+        """
+        Get tensor of stacked observations to predict an action from train buffer
+        """
+        ob = self.preprocess_ob(ob)
+
+        # get observations from test buffer
+        obs = (
+            [x for x in self.memory.test_buffer]
+            if len(self.memory.test_buffer) != 0
+            else [ob]
+        )
+        obs.append(ob)
+
+        # complete the sequence
+        while len(obs) != self.memory.test_buffer_capacity:
+            obs.append(obs[-1])
 
         # stack observations and return them
         ob_stack = torch.stack(obs).to(torch.device(device))

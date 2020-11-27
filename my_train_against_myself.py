@@ -1,5 +1,7 @@
 import gym
 import argparse
+
+import numpy as np
 import wimblepong
 import my_agent
 import my_utils
@@ -7,9 +9,11 @@ import torch
 
 
 # CONFIGURATION VARIABLE
-TARGET_UPDATE = 5  # update target_net every TARGET_UPDATE frames
-FRAME_STALL = 3  # push to memory a frame every FRAME_STALL frames
-GLIE_A = 10000  # a paramenter in glie -> a = 2500 means eps = 0.2 when episode = 10000
+TARGET_UPDATE = 50  # update target_net every TARGET_UPDATE frames
+SAVE_POLICY_TIME = 500  # epochs between saves of the policy
+GLIE_A = 2000
+SAVE_PLOT_TIME = 20  # epochs between saves of the plot
+START_UPDATE = 0  # minimum number of elements in memory before starting updating. Should be 0 if not loading a previous model
 
 
 # args parser
@@ -24,11 +28,11 @@ parser.add_argument(
 parser.add_argument(
     "--load", "--l", type=str, help="load model from file", default=None
 )
-# TODO: fix train boolean
 parser.add_argument(
     "--train", "--t", type=bool, help="decide if train the model or not", default=False
 )
 args = parser.parse_args()
+print(args.train)
 
 
 # Make the environment
@@ -39,37 +43,43 @@ episodes = 100000  # Number of episodes/games to play
 
 
 # Define the player IDs for both agents
-player = my_agent.Agent(env, 1)
-opponent = wimblepong.SimpleAi(env, 2)
+player = my_agent.Agent(1)
+player.load_model()
+opponent = my_agent.Agent(2)
+opponent.load_model()
 
 
 # Set the names for both SimpleAIs
 env.set_names(player.get_name(), opponent.get_name())
 
+
 # start training
 # load weights if requested
+start_ep_train = 0
 if args.load is not None:
     player.load_model(args.load)
-wins = [0]
-for ep in range(0, episodes):
+    # restart from baseline episode
+    start_ep_train = int(args.load.split("_")[-1].split(".")[0])
+
+wins = []
+for ep in range(start_ep_train, episodes):
 
     done = False
     (ob, _) = env.reset()
-    frame = 0
-    epsilon = GLIE_A / (GLIE_A + ep)
+    epsilon = GLIE_A / (GLIE_A + start_ep_train)
+    epsilon = 0.05 if epsilon < 0.05 else epsilon
     while not done:
 
         # Get the actions from both SimpleAIs
         action1 = player.get_action(ob, epsilon, args.train)
-        action2 = opponent.get_action()
+        action2 = opponent.get_action(np.fliplr(ob))
 
         # Step the environment and get the rewards and new observations
         (next_ob, _), (rew, _), done, info = env.step((action1, action2))
 
         # update agent policy
-        frame += 1
-        player.push_to_buffer(ob, action1, rew, next_ob, done)
-        if args.train:
+        if args.train and len(player.memory.memory) >= START_UPDATE:
+            player.push_to_train_buffer(ob, action1, rew, next_ob, done)
             player.update_policy_net()
 
         # move to next observation
@@ -87,13 +97,13 @@ for ep in range(0, episodes):
         print(f"Episode {ep+1} finised")
 
         # Update training image
-        if (ep + 1) % 20 == 0:
-            my_utils.plot_winsratio(wins, "DQN with experience replay")
+        if (ep + 1) % SAVE_PLOT_TIME == 0:
+            my_utils.plot_winsratio(wins, "DQN with experience replay", start_ep_train)
 
         # update target_net
-        if (ep + 1) % TARGET_UPDATE == 0:
+        if (ep + 1) % TARGET_UPDATE == 0 and len(player.memory.memory) >= START_UPDATE:
             player.update_target_net()
 
         # Save the policy
-        if (ep + 1) % 500 == 0:
+        if (ep + 1) % SAVE_POLICY_TIME == 0:
             torch.save(player.policy_net.state_dict(), f"weights/DQN_{ep+1}.ai")
