@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from PIL import Image
 from torch.tensor import Tensor
 from my_utils import Transition, ReplayMemory, rgb2grayscale
-from wimblepong import Wimblepong
 
 
 # check for cuda
@@ -16,9 +15,9 @@ if torch.cuda.is_available():
     device = "cuda:0"
 else:
     device = "cpu"
-    # DQN architecture
 
 
+# DQN architecture
 class DQN(nn.Module):
     """
     Defines the structure of the DQN architecture used to train the agent
@@ -31,14 +30,11 @@ class DQN(nn.Module):
     """
 
     def __init__(self, action_space_dim=3, hidden_dim=256) -> None:
-        """
-        Initialization of the DQN
-        ------------
-        # Parameters
-        ------------
+        """Initialization of the DQN
 
-        action_space_dim : dimension of the action space (0: stay still, 1: go up, 2: do down)  \n
-        hidden_dim : dimension of the embedding space of the input image
+        Args:
+            action_space_dim (int, optional): dimension of the action space. Defaults to 3.
+            hidden_dim (int, optional): dimension of the embedding space of the input image. Defaults to 256.
         """
 
         # call to super
@@ -63,13 +59,13 @@ class DQN(nn.Module):
         torch.nn.init.normal_(self.fc2.weight)
 
     def forward(self, x: Tensor) -> Tensor:
-        """
-        Forward the image in the network
-        ------------
-        # Parameters
-        ------------
+        """Forward an image throught the network
 
-        x : input image to feed forward into the network
+        Args:
+            x (Tensor): input image to feed forward into the network
+
+        Returns:
+            Tensor: The action predicted
         """
         x = F.relu(self.cnv1(x))
         x = F.relu(self.cnv2(x))
@@ -82,17 +78,7 @@ class DQN(nn.Module):
 
 # DQN Agent
 class Agent(object):
-    """
-    RL agent for the Atari game
-    ---------------
-    # Functions
-    ---------------
-
-    __init__() : initialize the agent
-    get_name() : get name for the agent
-    get_action() : get action to take given a frame as input
-    reset() : reset state for the agent
-    """
+    """RL agent for the Atari game"""
 
     def __init__(
         self,
@@ -102,14 +88,14 @@ class Agent(object):
         gamma: float = 0.98,
         memory_size: int = 40000,
     ) -> None:
-        """
-        Initialization of the Agent
-        ------------
-        # Parameters
-        ------------
+        """Initialization for the DQN agent
 
-        env : environment in which the agent operates, must be Wimblepong \n
-        player_id : id assigned to the player, id determines on which side the ai is going to play
+        Args:
+            player_id (int, optional): Side of the board on which to play. Defaults to 1.
+            name (str, optional): Name of the player. Defaults to "\(°_°')/".
+            batch_size (int, optional): Batch size of the update. Defaults to 128.
+            gamma (float, optional): Gamme value for update decay. Defaults to 0.98.
+            memory_size (int, optional): Experience memory capacity. Defaults to 40000.
         """
         # list of parameters of the agent
         self.player_id = player_id
@@ -133,14 +119,8 @@ class Agent(object):
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=1e-4)
 
     def update_policy_net(self) -> None:
-        """
-        Update policy network
-        ------------
-        # Parameters
-        ------------
+        """Update policy_net via Q-learning approximation"""
 
-        TODO: params
-        """
         # check if memory has enough elements to sample
         if len(self.memory) < self.batch_size:
             return
@@ -188,22 +168,22 @@ class Agent(object):
         self.optimizer.step()
 
     def update_target_net(self) -> None:
-        """
-        Update target net
-        """
+        """Update target net"""
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
     def get_action(
         self, ob: np.ndarray = None, epsilon: float = 0.1, train: bool = False
     ) -> int:
-        """
-        Interface function that returns the action that the agent took based
+        """Interface function that returns the action that the agent took based
         on the observation ob
-        ------------
-        # Parameters
-        ------------
 
-        ob : frame from the game
+        Args:
+            ob (np.ndarray, optional): Current observation from the game. Defaults to None.
+            epsilon (float, optional): Epsilon for epsilon greedy. Defaults to 0.1.
+            train (bool, optional): Identifies if the agent is in testing or training phase. Defaults to False.
+
+        Returns:
+            int: the action taken by the agent policy
         """
 
         # epsilon greedy action selection
@@ -227,35 +207,68 @@ class Agent(object):
         return action
 
     def get_name(self) -> str:
-        """
-        Interface function to retrieve the agents name
+        """Return name of the agent
+
+        Returns:
+            str: name of the agent
         """
         return self.name
 
     def reset(self) -> None:
-        """
-        clean the buffers of the memory
-        """
+        """Clean the buffers of the memory"""
         self.memory.test_buffer = []
         self.memory.train_buffer = []
 
-    def load_model(self, path: str = "weights/DQN_baseline.ai") -> None:
-        """
-        Load model from file
+    def load_model(
+        self,
+        path_ai: str = "weights/dumb_agent.ai",
+        path_optm: str = "weights/DQN_1000.optm",
+    ) -> None:
+        """Load model weights and optimizer from a certain path
+
+        Args:
+            path_ai (str, optional): Path to model weights. Defaults to "weights/DQN_baselin.ai".
+            path_optm (str, optional): Path to optimizer weights. Defaults to "weights/DQN_baseline.optm".
         """
         # TODO: change path before sending
+        # load model weights
         self.policy_net.load_state_dict(
-            torch.load(path, map_location=torch.device(device))
+            torch.load(path_ai, map_location=torch.device(device))
         )
-        self.policy_net.eval()
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
 
+        # load optimizer parameters
+        try:
+            self.optimizer.load_state_dict(
+                torch.load(path_optm, map_location=torch.device(device))
+            )
+        except:
+            print(
+                "WARNING: No optimizer state_dict found! Remember to load the optimizer state_dict when retraining the model!"
+            )
+
+    def save_model(self, dir: str, ep: int) -> None:
+        """Save model to file
+
+        Args:
+            dir (str): Directory to where save the model
+            ep (int): episode number
+        """
+        torch.save(self.policy_net.state_dict(), dir + f"/DQN_{ep+1}.ai")
+        torch.save(self.optimizer.state_dict(), dir + f"/DQN_{ep+1}.optm")
+
     def push_to_train_buffer(
         self, ob: np.ndarray, action: int, reward: int, next_ob: np.ndarray, done: bool
-    ) -> Any:
-        """
-        Push a Transition to the memory train buffer
+    ) -> None:
+        """Push a transition to the memory train buffer
+
+        Args:
+            ob (np.ndarray): Obsertation/state at time t
+            action (int): Action at time t
+            reward (int): Reward for taking action a in state s at time t
+            next_ob (np.ndarray): Observation/state at time t+1
+            done (bool): Defines if the game is finished or not
         """
         # preprocess observations
         ob = self.preprocess_ob(ob)
@@ -264,10 +277,10 @@ class Agent(object):
         # save to buffer
         action = torch.Tensor([action]).long().to(torch.device(device))
         reward = torch.tensor([reward], dtype=torch.float32).to(torch.device(device))
-        self.memory.push_to_test_buffer(ob, action, next_ob, reward, done)
+        self.memory.push_to_train_buffer(ob, action, next_ob, reward, done)
 
         # check if I need to push to memory
-        if len(self.memory.train_buffer) == self.memory.buffer_capacity or done:
+        if len(self.memory.train_buffer) == self.memory.train_buffer_capacity or done:
 
             # get the buffer and transition elements to push into memory
             buffer = self.memory.train_buffer
@@ -300,9 +313,11 @@ class Agent(object):
             if done:
                 self.reset()
 
-    def push_to_test_buffer(self, ob: np.ndarray) -> Any:
-        """
-        Push a Transition to the test buffer
+    def push_to_test_buffer(self, ob: np.ndarray) -> None:
+        """Push a transition to the train buffer
+
+        Args:
+            ob (np.ndarray): Observation to push to the buffer
         """
         # preprocess observation and push to test buffer
         ob = self.preprocess_ob(ob)
@@ -312,9 +327,14 @@ class Agent(object):
         if len(self.memory.test_buffer) == self.memory.test_buffer_capacity:
             self.memory.test_buffer = self.memory.test_buffer[1:]
 
-    def get_stack_from_train_buffer(self, ob) -> Tensor:
-        """
-        Get tensor of stacked observations to predict an action from train buffer
+    def get_stack_from_train_buffer(self, ob: np.ndarray) -> Tensor:
+        """Get stack of preprocessed observations/states from train buffer
+
+        Args:
+            ob (np.ndarray): Current observation/state
+
+        Returns:
+            Tensor: Stack of preprocessed observations/states
         """
         ob = self.preprocess_ob(ob)
 
@@ -336,8 +356,13 @@ class Agent(object):
         return ob_stack
 
     def get_stack_from_test_buffer(self, ob: np.ndarray) -> Tensor:
-        """
-        Get tensor of stacked observations to predict an action from train buffer
+        """Get stack of preprocessed observations/states from test buffer
+
+        Args:
+            ob (np.ndarray): Current observation/state
+
+        Returns:
+            Tensor: Stack of preprocessed observations/states
         """
         ob = self.preprocess_ob(ob)
 
@@ -359,11 +384,16 @@ class Agent(object):
         return ob_stack
 
     def preprocess_ob(self, ob: np.ndarray) -> Tensor:
-        """
-        Preprocess image:
-        - shrink the image to 100x100
-        - transform it to black and white
-        - transform it into a Tensor
+        """Preprocess observation:\n
+        - shrink the image to 100x100\n
+        - transform it to black and white\n
+        - transform it into a Tensor\n
+
+        Args:
+            ob (np.ndarray): Observation to preprocess
+
+        Returns:
+            Tensor: Preprocessed observation
         """
         # shrink image
         ob = Image.fromarray(ob)

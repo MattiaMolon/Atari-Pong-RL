@@ -4,9 +4,24 @@ import random
 from collections import namedtuple
 
 
-def plot_winsratio(wins, title, start_idx, wsize_mean=100, wsize_means_mean=1000):
-    """
-    Plots moving average WR for the last 100 matches
+def plot_winsratio(
+    wins: list,
+    title: str,
+    start_idx: int = 0,
+    wsize_mean: int = 100,
+    wsize_means_mean: int = 1000,
+    opponent_update_idxs=None,
+):
+    """Winrate plotting function, plots both a the WR over the last wsize_mean episodes and
+    a WR mean over the last wsize_means_mean wsize_mean episodes
+
+    Args:
+        wins (list): Wins vector. Contains 0 or 1 for each loss or victory
+        title (str): Title to use in the plot
+        start_idx (int, optional): Start for the x labels. Defaults to 0.
+        wsize_mean (int, optional): Window size to compute the Winrate. Defaults to 100.
+        wsize_means_mean (int, optional): Window size to compute the mean over the winrates. Defaults to 1000.
+        opponent_updates_idxs (list, optional): List of indexes where the update of the opponent state dict has happened in self play. Default None.
     """
     if len(wins) >= wsize_mean:
 
@@ -34,15 +49,26 @@ def plot_winsratio(wins, title, start_idx, wsize_mean=100, wsize_means_mean=1000
                 label=f"Running {wsize_mean} average WR mean",
             )
 
+        # add vertical lines for opponent update during self play
+        if opponent_update_idxs != None:
+            for x in opponent_update_idxs:
+                if x >= wsize_mean:
+                    plt.axvline(x=x, c="red")
+
         plt.legend()
         plt.title(f"Training {title}")
         plt.savefig("imgs/train_ai.png")
         plt.close()
 
 
-def rgb2grayscale(rgb: np.ndarray):
-    """
-    transform rgb image to gray scale
+def rgb2grayscale(rgb: np.ndarray) -> np.ndarray:
+    """Transform RGB image to grayscale
+
+    Args:
+        rgb (np.ndarray): RGB image to transform
+
+    Returns:
+        np.ndarray: Grayscale image
     """
     # transform to rgb
     r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
@@ -66,6 +92,13 @@ class ReplayMemory(object):
         train_buffer_capacity: int,
         test_buffer_capacity: int,
     ) -> None:
+        """Initialization of the replay memory
+
+        Args:
+            memory_capacity (int): Maximum number of elements to fit in the memory
+            train_buffer_capacity (int): Maximum number of elements to fit in the train buffer
+            test_buffer_capacity (int): Maximum number of elements to fit in the test buffer
+        """
         self.memory_capacity = memory_capacity
         self.train_buffer_capacity = train_buffer_capacity
         self.test_buffer_capacity = test_buffer_capacity
@@ -75,26 +108,43 @@ class ReplayMemory(object):
         self.memory_position = 0
 
     def push_to_memory(self, *args) -> None:
-        """Saves a transition."""
+        """Save a transition to memory"""
         if len(self.memory) < self.memory_capacity:
             self.memory.append(None)
         self.memory[self.memory_position] = Transition(*args)
         self.memory_position = (self.memory_position + 1) % self.memory_capacity
 
     def push_to_train_buffer(self, *args) -> None:
-        """Saves a transition to train buffer."""
+        """Save a transition to train buffer"""
         self.train_buffer.append(Transition(*args))
-        if len(self.train_buffer) > self.buffer_capacity:
+        if len(self.train_buffer) > self.train_buffer_capacity:
             raise Exception("Error: capacity of the train_buffer exceded")
 
-    def push_to_test_buffer(self, ob) -> None:
-        """Saves an observation to test buffer"""
+    def push_to_test_buffer(self, ob: np.ndarray) -> None:
+        """Save an observation to test buffer
+
+        Args:
+            ob (np.ndarray): Observation/state to push into the buffer
+        """
         self.test_buffer.append(ob)
         if len(self.test_buffer) > self.test_buffer_capacity:
             raise Exception("Error: capacity of the test_buffer exceded")
 
     def sample(self, batch_size: int) -> np.ndarray:
+        """Sample batch_size random elements from memory
+
+        Args:
+            batch_size (int): Number of elements to sample
+
+        Returns:
+            np.ndarray: Sampled elements
+        """
         return random.sample(self.memory, batch_size)
 
     def __len__(self) -> int:
+        """Overwrite of the len function for the object
+
+        Returns:
+            int: Length of the memory
+        """
         return len(self.memory)
