@@ -172,13 +172,13 @@ class Agent(object):
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
     def get_action(
-        self, ob: np.ndarray, epsilon: float = 0.1, train: bool = False
+        self, frame: np.ndarray, epsilon: float = 0.1, train: bool = False
     ) -> int:
         """Interface function that returns the action that the agent took based
-        on the observation ob
+        on the observation frame
 
         Args:
-            ob (np.ndarray, optional): Current observation from the game.
+            frame (np.ndarray, optional): Current observation from the game.
             epsilon (float, optional): Epsilon for epsilon greedy. Defaults to 0.1.
             train (bool, optional): Identifies if the agent is in testing or training phase. Defaults to False.
 
@@ -192,9 +192,9 @@ class Agent(object):
         else:
             # get stack of obeservations
             if train:
-                ob_stack = self.get_stack_from_train_buffer(ob)
+                ob_stack = self.get_stack_from_train_buffer(frame)
             else:
-                ob_stack = self.get_stack_from_test_buffer(ob)
+                ob_stack = self.get_stack_from_test_buffer(frame)
             ob_stack = ob_stack.unsqueeze(0)
 
             # predict best action
@@ -202,7 +202,7 @@ class Agent(object):
                 action = self.policy_net.forward(ob_stack).argmax().item()
 
         if not train:
-            self.push_to_test_buffer(ob)
+            self.push_to_test_buffer(frame)
 
         return action
 

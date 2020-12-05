@@ -45,7 +45,7 @@ episodes = 100000  # Number of episodes/games to play
 player = agent.Agent(1)
 player.load_model()
 opponent = agent.Agent(2)
-opponent.load_model(path_ai="../weihts/basic_best.ai")
+opponent.load_model(path_ai="../weights/basic_best.ai")
 
 
 # Set the names for both agents
