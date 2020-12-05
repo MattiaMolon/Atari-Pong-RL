@@ -2,7 +2,7 @@ import gym
 import argparse
 import wimblepong
 import agent
-import Ugo_utils
+import utils
 
 
 # CONFIGURATION VARIABLE
@@ -86,7 +86,7 @@ for ep in range(START_EPISODE, episodes):
 
         # Update training image
         if (ep + 1) % SAVE_PLOT_TIME == 0:
-            Ugo_utils.plot_winsratio(wins, "DQN with experience replay", START_EPISODE)
+            utils.plot_winsratio(wins, "DQN with experience replay", START_EPISODE)
 
         # update target_net
         if (ep + 1) % TARGET_UPDATE == 0:

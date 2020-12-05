@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 from PIL import Image
 from torch.tensor import Tensor
-from Ugo_utils import Transition, ReplayMemory, rgb2grayscale
+from utils import Transition, ReplayMemory, rgb2grayscale
 
 
 # check for cuda

@@ -3,7 +3,7 @@ import argparse
 import wimblepong
 import numpy as np
 import agent
-import Ugo_utils
+import utils
 import torch.optim as optim
 
 
@@ -100,7 +100,7 @@ for ep in range(START_EPISODE, episodes):
 
         # Update training image
         if (ep + 1) % SAVE_PLOT_TIME == 0:
-            Ugo_utils.plot_winsratio(
+            utils.plot_winsratio(
                 wins,
                 "DQN with experience replay",
                 START_EPISODE,
