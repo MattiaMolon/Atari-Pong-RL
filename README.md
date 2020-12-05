@@ -5,7 +5,7 @@ The environment is used in the Reinforcement Learning course at Aalto University
 Finland.
 
 ## How to use
-- Clone the repository: `https://github.com/aalto-intelligent-robotics/Wimblepong`.
+- Clone the repository: `https://github.com/MattiaMolon/Atari-Pong-RL`.
 - Install the dependencies listed in requirements.txt.
 - **to train:** check the `train_basic.py` to train the agent against simpleAI or `train_hibrid.py` to train the agent one game against simpleAI and one game against himself (This helps the agent to not overfit against simpleAI alone). Run both files with the flag `--train True`.
 - **to test:** check the `train_basic.py` to test the agent against simoleAI or `train_hibrid.py` to test the agent against another agent. Run both the files **without** the flag `--train True`. 
