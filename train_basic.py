@@ -1,8 +1,8 @@
 import gym
 import argparse
 import wimblepong
-import my_agent
-import my_utils
+import agent
+import Ugo_utils
 
 
 # CONFIGURATION VARIABLE
@@ -40,8 +40,8 @@ episodes = 100000  # Number of episodes/games to play
 
 
 # Define the player IDs for both agents
-player = my_agent.Agent(1)
-player.load_model(path_ai="weights/hibrid_best.ai")
+player = agent.Agent(1)
+player.load_model()
 opponent = wimblepong.SimpleAi(env, 2)
 
 
@@ -86,7 +86,7 @@ for ep in range(START_EPISODE, episodes):
 
         # Update training image
         if (ep + 1) % SAVE_PLOT_TIME == 0:
-            my_utils.plot_winsratio(wins, "DQN with experience replay", START_EPISODE)
+            Ugo_utils.plot_winsratio(wins, "DQN with experience replay", START_EPISODE)
 
         # update target_net
         if (ep + 1) % TARGET_UPDATE == 0:

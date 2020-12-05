@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 from PIL import Image
 from torch.tensor import Tensor
-from my_utils import Transition, ReplayMemory, rgb2grayscale
+from Ugo_utils import Transition, ReplayMemory, rgb2grayscale
 
 
 # check for cuda
@@ -83,7 +83,7 @@ class Agent(object):
     def __init__(
         self,
         player_id: int = 1,
-        name: str = "\(°_°')/",
+        name: str = "Ugo",
         batch_size: int = 128,
         gamma: float = 0.98,
         memory_size: int = 40000,
@@ -92,7 +92,7 @@ class Agent(object):
 
         Args:
             player_id (int, optional): Side of the board on which to play. Defaults to 1.
-            name (str, optional): Name of the player. Defaults to "\(°_°')/".
+            name (str, optional): Name of the player. Defaults to "Ugo".
             batch_size (int, optional): Batch size of the update. Defaults to 128.
             gamma (float, optional): Gamme value for update decay. Defaults to 0.98.
             memory_size (int, optional): Experience memory capacity. Defaults to 40000.
@@ -172,13 +172,13 @@ class Agent(object):
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
     def get_action(
-        self, ob: np.ndarray = None, epsilon: float = 0.1, train: bool = False
+        self, ob: np.ndarray, epsilon: float = 0.1, train: bool = False
     ) -> int:
         """Interface function that returns the action that the agent took based
         on the observation ob
 
         Args:
-            ob (np.ndarray, optional): Current observation from the game. Defaults to None.
+            ob (np.ndarray, optional): Current observation from the game.
             epsilon (float, optional): Epsilon for epsilon greedy. Defaults to 0.1.
             train (bool, optional): Identifies if the agent is in testing or training phase. Defaults to False.
 
@@ -221,16 +221,15 @@ class Agent(object):
 
     def load_model(
         self,
-        path_ai: str = "weights/dumb_agent.ai",
-        path_optm: str = "weights/DQN_1000.optm",
+        path_ai: str = "weights/hibrid_tuned_best.ai",
+        path_optm: str = None,
     ) -> None:
         """Load model weights and optimizer from a certain path
 
         Args:
-            path_ai (str, optional): Path to model weights. Defaults to "weights/DQN_baselin.ai".
-            path_optm (str, optional): Path to optimizer weights. Defaults to "weights/DQN_baseline.optm".
+            path_ai (str, optional): Path to model weights. Defaults to "weights/hibrid_tuned_best.ai".
+            path_optm (str, optional): Path to optimizer weights. Defaults to None.
         """
-        # TODO: change path before sending
         # load model weights
         self.policy_net.load_state_dict(
             torch.load(path_ai, map_location=torch.device(device))
@@ -239,14 +238,15 @@ class Agent(object):
         self.target_net.eval()
 
         # load optimizer parameters
-        try:
-            self.optimizer.load_state_dict(
-                torch.load(path_optm, map_location=torch.device(device))
-            )
-        except:
-            print(
-                "WARNING: No optimizer state_dict found! Remember to load the optimizer state_dict when retraining the model!"
-            )
+        if path_optm is not None:
+            try:
+                self.optimizer.load_state_dict(
+                    torch.load(path_optm, map_location=torch.device(device))
+                )
+            except:
+                print(
+                    "WARNING: No optimizer state_dict found! Remember to load the optimizer state_dict when retraining the model!"
+                )
 
     def save_model(self, dir: str, ep: int) -> None:
         """Save model to file

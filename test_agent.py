@@ -22,11 +22,11 @@ parser.add_argument("--games", "-g", type=int, default=100, help="number of game
 args = parser.parse_args()
 
 sys.path.insert(0, args.dir1)
-import my_agent
+import agent
 
 orig_wd = os.getcwd()
 os.chdir(args.dir1)
-agent1 = my_agent.Agent()
+agent1 = agent.Agent()
 agent1.load_model()
 os.chdir(orig_wd)
 del sys.path[0]
