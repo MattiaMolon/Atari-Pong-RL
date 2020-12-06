@@ -4,7 +4,9 @@ This project is a DQN agent able to play in the pong-v0 OpenAI Gym environment.
 The environment is used in the Reinforcement Learning course at Aalto University,
 Finland.
 
-![Random game: best_agent Vs simpleAI](./submission/game.gif)
+<p align="center">
+  <img width="300" height="350" src="./submission/game.gif">
+</p>
 
 ## :wrench: How to use
 - Clone the repository: `https://github.com/MattiaMolon/Atari-Pong-RL`.
@@ -25,5 +27,5 @@ Additional details on the environment used and how to interact with it are avail
 ## :stars: Future works:
 - [x] implementation DQN
 - [x] implementation experience replay, buffers, and preprocessing
-- [] implementation of PPO
-- [] implementation of actor-critic
+- [ ] implementation of PPO
+- [ ] implementation of actor-critic
